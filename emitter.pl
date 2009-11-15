@@ -16,6 +16,7 @@ my $bus = Net::DBus::GLib->session();
 my $service = $bus->get_service("org.presentationText.TextService");
 my $object  = $service->get_object("/org/presentationText/TextService/object",
 				   "org.presentationText.TextService");
+$object->connect_to_signal("newMessage", \&message_signal_handler);
 
 sub message_signal_handler {
 	$msg = shift;
@@ -24,6 +25,7 @@ sub message_signal_handler {
 	Glib::Timeout->add( 300, sub{$object->sendNewMessage;});
 }
 
+# text transition behaviours as a package
 package TextBehavior;
 sub newIn{
 	my $class = shift;
@@ -73,6 +75,7 @@ sub remove{
 
 package main;
 
+# add an actor and place it right in the middle
 sub newLabel{
 	$stage=shift;
 	$label = Clutter::Text->new("Sans 80", "");
@@ -84,34 +87,46 @@ sub newLabel{
 	return $label;
 }
 
-$object->connect_to_signal("newMessage", \&message_signal_handler);
+# init clutter
+Clutter::init();
 
 # create the main stage
-Clutter::init();
 $stage = Clutter::Stage->get_default();
 $stage->set_color(Clutter::Color->new(0x00, 0x00, 0x00, 0xFF));
 $stage->set_size(800, 600);
 
-# add an actor and place it right in the middle
+# create 2 labels
 $label_one = newLabel($stage);
 $label_two = newLabel($stage);
 
+# create a timeline and put in and out transition effects into the timeline
 my $timeline = Clutter::Timeline->new(300);
 my $b_in = TextBehavior->newIn($timeline);
 my $b_out = TextBehavior->newOut($timeline);
 $b_in->apply($label_one);
 $b_out->apply($label_two);
-$i=0;
 
+# when the window starts to show, execute message_signal_handler to prompt input.pl for input
 $stage->signal_connect('show', sub{message_signal_handler("")});
+
+# use a globalized counter
+$counter=0;
+
+# the behaviour of display message used by message_signal_handler
 sub displayMessage { 
+	# receive text
 	my $line=shift;
 	chomp($line);
+
+	# stop the timeline
 	$timeline->stop();
 
+	# remove behaviours
 	$b_in->remove;
 	$b_out->remove;
-	if($i%2 == 1){
+	
+	# determine which one should be transition in and another one should be transition out.
+	if($counter%2 == 1){
 		$b_in->apply($label_one);
 		$b_out->apply($label_two);
 		$label_one->set_text($line);
@@ -122,12 +137,16 @@ sub displayMessage {
 		$label_two->set_text($line);
 		$label_two->set_anchor_point($label_two->get_width() / 2, $label_two->get_height() / 2);
 	}
-	$timeline->start();
-	$i++;
-};
-$timeline->start();
-$stage->show_all(); 
 
+	# start the timeline
+	$timeline->start();
+
+	# add the counter
+	$counter++;
+};
+
+# last few things
+$stage->show_all(); 
 Glib::MainLoop->new()->run();
 1;
 
