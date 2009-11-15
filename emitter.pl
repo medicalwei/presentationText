@@ -12,8 +12,9 @@ binmode(STDERR, ':encoding(utf8)');
 # get the dbus object
 
 my $bus = Net::DBus::GLib->session();
-
-my $service = $bus->get_service("org.presentationText.TextService");
+my $service;
+eval{$service = $bus->get_service("org.presentationText.TextService");}; # try if the dbus service is exist
+die("Please execute input.pl first.\n") if ($@); # catch if the dbus service isn't there
 my $object  = $service->get_object("/org/presentationText/TextService/object",
 				   "org.presentationText.TextService");
 $object->connect_to_signal("newMessage", \&message_signal_handler);

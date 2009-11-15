@@ -40,5 +40,6 @@ my $bus = Net::DBus->session();
 my $service = $bus->export_service("org.presentationText.TextService");
 my $object = TextObject->new($service);
 
+print "Execute emitter.pl to start sending message to display\n";
 Net::DBus::Reactor->main->run();
 
