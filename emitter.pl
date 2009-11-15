@@ -9,7 +9,7 @@ binmode(STDIN, ':encoding(utf8)');
 binmode(STDOUT, ':encoding(utf8)');
 binmode(STDERR, ':encoding(utf8)');
 
-# create the dbus object
+# get the dbus object
 
 my $bus = Net::DBus::GLib->session();
 
@@ -24,6 +24,66 @@ sub message_signal_handler {
 	Glib::Timeout->add( 300, sub{$object->sendNewMessage;});
 }
 
+package TextBehavior;
+sub newIn{
+	my $class = shift;
+	my $timeline = shift;
+	my $rotate_alpha = Clutter::Alpha->new($timeline, 'ease-out-sine');
+	my $shift_alpha = Clutter::Alpha->new($timeline, 'ease-out-sine');
+	my $depth_alpha = Clutter::Alpha->new($timeline, 'ease-out-sine');
+	my $self = {
+		rotate_behave => Clutter::Behaviour::Rotate->new($rotate_alpha, 'z-axis', 'cw', 270, 0),
+		shift_behave => Clutter::Behaviour::Opacity->new($shift_alpha, 0, 255),
+		depth_behave => Clutter::Behaviour::Depth->new($depth_alpha, 1000, 0)
+	};
+	bless $self, $class;
+	return $self;
+}
+
+sub newOut{
+	my $class = shift;
+	my $timeline = shift;
+	my $rotate_alpha = Clutter::Alpha->new($timeline, 'ease-out-sine');
+	my $shift_alpha = Clutter::Alpha->new($timeline, 'ease-out-sine');
+	my $depth_alpha = Clutter::Alpha->new($timeline, 'ease-out-sine');
+	my $self = {
+		rotate_behave => Clutter::Behaviour::Rotate->new($rotate_alpha, 'z-axis', 'cw', 0, 90),
+		shift_behave => Clutter::Behaviour::Opacity->new($shift_alpha, 255, 0),
+		depth_behave => Clutter::Behaviour::Depth->new($depth_alpha, 0, -1000)
+	};
+	bless $self, $class;
+	return $self;
+}
+
+sub apply{
+	my ($self, $actor) = @_;
+	$self->{rotate_behave}->apply($actor);
+	$self->{shift_behave}->apply($actor);
+	$self->{depth_behave}->apply($actor);
+	return $actor;
+}
+
+sub remove{
+	my $self = shift;
+	$self->{rotate_behave}->remove_all;
+	$self->{shift_behave}->remove_all;
+	$self->{depth_behave}->remove_all;
+	return $actor;
+}
+
+package main;
+
+sub newLabel{
+	$stage=shift;
+	$label = Clutter::Text->new("Sans 80", "");
+	$label->set_color(Clutter::Color->new(0xff, 0xff, 0xff, 0xdd));
+	$label->set_anchor_point($label->get_width() / 2,
+	                     $label->get_height() / 2);
+	$label->set_position($stage->get_width() / 2, $stage->get_height() / 2);
+	$stage->add($label);
+	return $label;
+}
+
 $object->connect_to_signal("newMessage", \&message_signal_handler);
 
 # create the main stage
@@ -33,70 +93,34 @@ $stage->set_color(Clutter::Color->new(0x00, 0x00, 0x00, 0xFF));
 $stage->set_size(800, 600);
 
 # add an actor and place it right in the middle
-$label = Clutter::Text->new("Sans 80", "");
-$label_old = Clutter::Text->new("Sans 80", "");
-$label->set_color(Clutter::Color->new(0xff, 0xff, 0xff, 0xdd));
-$label_old->set_color(Clutter::Color->new(0xff, 0xff, 0xff, 0xdd));
-$label->set_anchor_point($label->get_width() / 2,
-                         $label->get_height() / 2);
-$label_old->set_anchor_point($label->get_width() / 2,
-                         $label->get_height() / 2);
-$label->set_position($stage->get_width() / 2, $stage->get_height() / 2);
-$label_old->set_position($stage->get_width() / 2, $stage->get_height() / 2);
-$stage->add($label);
-$stage->add($label_old);
+$label_one = newLabel($stage);
+$label_two = newLabel($stage);
 
 my $timeline = Clutter::Timeline->new(300);
-my $alpha = Clutter::Alpha->new($timeline, 'ease-out-sine');
-my $alpha2 = Clutter::Alpha->new($timeline, 'ease-out-sine');
-my $alpha3 = Clutter::Alpha->new($timeline, 'ease-out-sine');
-my $alpha_old = Clutter::Alpha->new($timeline, 'ease-out-sine');
-my $alpha_old2 = Clutter::Alpha->new($timeline, 'ease-out-sine');
-my $alpha_old3 = Clutter::Alpha->new($timeline, 'ease-out-sine');
-my $r_behave=Clutter::Behaviour::Rotate->new($alpha, 'z-axis', 'cw', 270, 360);
-my $o_behave=Clutter::Behaviour::Opacity->new($alpha2, 0, 255);
-my $d_behave=Clutter::Behaviour::Depth->new($alpha3, 1000, 0);
-my $r_old_behave=Clutter::Behaviour::Rotate->new($alpha_old, 'z-axis', 'cw', 0, 90);
-my $o_old_behave=Clutter::Behaviour::Opacity->new($alpha_old2, 255, 0);
-my $d_old_behave=Clutter::Behaviour::Depth->new($alpha_old3, 0, -1000);
-$r_behave->apply($label);
-$o_behave->apply($label);
-$d_behave->apply($label);
-$r_old_behave->apply($label_old);
-$o_old_behave->apply($label_old);
-$d_old_behave->apply($label_old);
+my $b_in = TextBehavior->newIn($timeline);
+my $b_out = TextBehavior->newOut($timeline);
+$b_in->apply($label_one);
+$b_out->apply($label_two);
 $i=0;
 
-$stage->signal_connect('show', sub{$object->sendNewMessage;});
+$stage->signal_connect('show', sub{message_signal_handler("")});
 sub displayMessage { 
 	my $line=shift;
 	chomp($line);
 	$timeline->stop();
 
-	$r_behave->remove_all;
-	$o_behave->remove_all;
-	$d_behave->remove_all;
-	$r_old_behave->remove_all;
-	$o_old_behave->remove_all;
-	$d_old_behave->remove_all;
+	$b_in->remove;
+	$b_out->remove;
 	if($i%2 == 1){
-		$r_behave->apply($label);
-		$o_behave->apply($label);
-		$d_behave->apply($label);
-		$r_old_behave->apply($label_old);
-		$o_old_behave->apply($label_old);
-		$d_old_behave->apply($label_old);
-		$label->set_text($line);
-		$label->set_anchor_point($label->get_width() / 2, $label->get_height() / 2);
+		$b_in->apply($label_one);
+		$b_out->apply($label_two);
+		$label_one->set_text($line);
+		$label_one->set_anchor_point($label_one->get_width() / 2, $label_one->get_height() / 2);
 	} else {
-		$r_behave->apply($label_old);
-		$o_behave->apply($label_old);
-		$d_behave->apply($label_old);
-		$r_old_behave->apply($label);
-		$o_old_behave->apply($label);
-		$d_old_behave->apply($label);
-		$label_old->set_text($line);
-		$label_old->set_anchor_point($label_old->get_width() / 2, $label_old->get_height() / 2);
+		$b_in->apply($label_two);
+		$b_out->apply($label_one);
+		$label_two->set_text($line);
+		$label_two->set_anchor_point($label_two->get_width() / 2, $label_two->get_height() / 2);
 	}
 	$timeline->start();
 	$i++;
